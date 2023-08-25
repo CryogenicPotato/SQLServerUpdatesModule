@@ -65,7 +65,8 @@ function Get-SqlServerUpdate
             'SQL Server 2014',
             'SQL Server 2016',
             'SQL Server 2017',
-            'SQL Server 2019')]
+            'SQL Server 2019',
+            'SQL Server 2022')]
         [string]$Version,
         [switch]$Force,
         [switch]$Offline
@@ -77,61 +78,19 @@ function Get-SqlServerUpdate
     $ObjReturn = @()
     $parser = New-Object AngleSharp.Html.Parser.HtmlParser
     $WebsiteAddress = 'http://sqlserverupdates.com/'
-
-    if ((-not (Test-Connection -ComputerName 8.8.8.8 -Count 1 -Quiet)) -and (Test-Path $CachedData))
+    
+    try
     {
-        $ReturnCachedData = $true
+        # enable TLS 1.2
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $html = Invoke-WebRequest -Uri $WebsiteAddress -UseBasicParsing
+        $content = $parser.ParseDocument($html);
+        Write-Verbose ("{0};Invoke-WebRequest" -f $ElapsedTime.Elapsed)
     }
-    elseif ((Get-Item $CachedData -ErrorAction SilentlyContinue | Where-Object LastWriteTime -ge (Get-Date).AddHours(-4)) -and (-not $Force.IsPresent))
+    catch
     {
-        $ReturnCachedData = $true
-    }
-    elseif ($Force.IsPresent)
-    {
-        $ReturnCachedData = $false
-    }
-    elseif ($Offline.IsPresent)
-    {
-        $ReturnCachedData = $true
-    }
-    else
-    {
-        $ReturnCachedData = $false
-    }
-
-    if ($ReturnCachedData)
-    {
-        Write-Verbose "Reading list of updates with cache file..."
-        $result = Import-Clixml -Path $CachedData
-        if ($Version)
-        {
-            return ($result | Where-Object Name -eq $Version)
-        }
-        else
-        {
-            return $result
-        }
-    }
-    else
-    {
-        try
-        {
-            # enable TLS 1.2
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            $html = Invoke-WebRequest -Uri $WebsiteAddress
-            $content = $parser.ParseDocument($html);
-            Write-Verbose ("{0};Invoke-WebRequest" -f $ElapsedTime.Elapsed)
-        }
-        catch
-        {
-            Write-Output "Check connection..."
-            if (Test-Path -Path $CachedData)
-            {
-                Write-Output "The module will working on cached data"
-            }
-            Write-Warning $_.Exception.Message
-            Break
-        }
+        Write-Warning $_.Exception.Message
+        Break
     }
 
     # setting for count of column in table on website
@@ -143,6 +102,7 @@ function Get-SqlServerUpdate
         'SQL Server 2016'    = 5
         'SQL Server 2017'    = 4
         'SQL Server 2019'    = 3
+        'SQL Server 2022'    = 3
     }
 
     $VersionSQL = [ordered]@{
@@ -153,6 +113,7 @@ function Get-SqlServerUpdate
         'SQL Server 2016'    = ($content.Links | Where-Object Href -Match "sql-server-2016-updates")[0]
         'SQL Server 2017'    = ($content.Links | Where-Object Href -Match "sql-server-2017-updates")[0]
         'SQL Server 2019'    = ($content.Links | Where-Object Href -Match "sql-server-2019-updates")[0]
+        'SQL Server 2022'    = ($content.Links | Where-Object Href -Match "sql-server-2022-updates")[0]
     }
     Write-Verbose ("{0};Links" -f $ElapsedTime.Elapsed)
 
@@ -169,7 +130,7 @@ function Get-SqlServerUpdate
         # $SQL = 'SQL Server 2008'
         try
         {
-            $webHtml = Invoke-WebRequest -Uri $VersionSQL.$SQL.href
+            $webHtml = Invoke-WebRequest -Uri $VersionSQL.$SQL.href -UseBasicParsing
             $ListUpdates = $parser.ParseDocument($webHtml);
         }
         catch
@@ -203,12 +164,13 @@ function Get-SqlServerUpdate
                 SupportEnds      = ''
             }
 
-            $update.Name = ($VersionSQL.$SQL.Text).Replace(" Updates", "")
+            $update.Name = $SQL
+            #$update.Name = ($VersionSQL.$SQL.Text).Replace(" Updates", "")
 
             if ($ColumnSetting.$SQL -eq 5)
             {
-                $update.ServicePack = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", ""); $i++
-                $update.CumulativeUpdate = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", ""); $i++
+                $update.ServicePack = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", "").Trim(); $i++
+                $update.CumulativeUpdate = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", "").Trim(); $i++
 
                 $ReleaseDate = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s|\?\?)", "").Trim(); $i++
                 if ([datetime]::TryParse($ReleaseDate, [ref](Get-Date)))
@@ -220,13 +182,13 @@ function Get-SqlServerUpdate
                     $update.ReleaseDate = [datetime]'0001/01/01'
                 }
 
-                $update.Build = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", ""); $i++
-                $update.SupportEnds = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s|\?\?)", "").Trim()
+                $update.Build = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", "").Trim(); $i++
+                $update.SupportEnds = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s|\?\?)", "").Trim().Substring(0, 10)
             }
             elseif ($ColumnSetting.$SQL -eq 4)
             {
                 $update.ServicePack = ''
-                $update.CumulativeUpdate = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", ""); $i++
+                $update.CumulativeUpdate = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", "").Trim(); $i++
 
                 $ReleaseDate = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s|\?\?)", "").Trim(); $i++
                 if ([datetime]::TryParse($ReleaseDate, [ref](Get-Date)))
@@ -238,13 +200,13 @@ function Get-SqlServerUpdate
                     $update.ReleaseDate = [datetime]'0001/01/01'
                 }
 
-                $update.Build = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", ""); $i++
-                $update.SupportEnds = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s|\?\?)", "").Trim()
+                $update.Build = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", "").Trim(); $i++
+                $update.SupportEnds = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s|\?\?)", "").Trim().Substring(0, 10)
             }
             elseif ($ColumnSetting.$SQL -eq 3)
             {
                 $update.ServicePack = ''
-                $update.CumulativeUpdate = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", ""); $i++
+                $update.CumulativeUpdate = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", "").Trim(); $i++
 
                 $ReleaseDate = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s|\?\?)", "").Trim(); $i++
                 if ([datetime]::TryParse($ReleaseDate, [ref](Get-Date)))
@@ -256,7 +218,7 @@ function Get-SqlServerUpdate
                     $update.ReleaseDate = [datetime]'0001/01/01'
                 }
 
-                $update.Build = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", "")
+                $update.Build = (($tableUpdateTD[$i].innerHTML) -Replace "( &nbsp;|&nbsp;|^\s)", "").Trim()
                 $update.SupportEnds = ''
             }
 
@@ -267,7 +229,7 @@ function Get-SqlServerUpdate
                 {
                     $update.Link = ([regex]::Matches($update.CumulativeUpdate, $linkRegex)[0].Value).Replace('"', '')
                 }
-                elseif ([regex]::Matches($object.ServicePack, $linkRegex) -ne "")
+                elseif ([regex]::Matches($update.ServicePack, $linkRegex) -ne "")
                 {
                     $update.Link = ([regex]::Matches($update.ServicePack, $linkRegex)[0].Value).Replace('"', '')
                 }
@@ -282,10 +244,6 @@ function Get-SqlServerUpdate
     }
 
     Write-Output $ObjReturn
-    if ((Get-Item $CachedData -ErrorAction SilentlyContinue | Where-Object LastWriteTime -le (Get-Date).AddHours(-4)) -or (-not (Test-Path $CachedData)) -and (-not $Version))
-    {
-        $ObjReturn | Export-Clixml -Path $CachedData
-    }
 
     $ElapsedTime.Stop()
 }

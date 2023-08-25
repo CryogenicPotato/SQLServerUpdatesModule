@@ -20,10 +20,8 @@
           1.1.0.1 - Added parameter - SqlCredential
 #>
 
-Function Get-SQLServerFullName($param)
-{
-    switch ($param)
-    {
+Function Get-SQLServerFullName($param) {
+    switch ($param) {
         9 { return "SQL Server 2005" }
         10 { return "SQL Server 2008" }
         10.50 { return "SQL Server 2008 R2" }
@@ -32,11 +30,11 @@ Function Get-SQLServerFullName($param)
         13 { return "SQL Server 2016" }
         14 { return "SQL Server 2017" }
         15 { return "SQL Server 2019" }
+        16 { return "SQL Server 2022" }
     }
 }
 
-function Get-SqlServerVersion
-{
+function Get-SqlServerVersion {
     [CmdletBinding()]
     Param
     (
@@ -47,43 +45,32 @@ function Get-SqlServerVersion
         [PSCredential]$SqlCredential
     )
 
-    Begin
-    {
+    Begin {
 
     }
-    Process
-    {
-        try
-        {
+    Process {
+        try {
             $connectsqlserver = New-Object Microsoft.SqlServer.Management.Smo.Server $ServerInstance
             $connectsqlserver.ConnectionContext.ApplicationName = "SqlServerUpdatesModule"
             $connectsqlserver.ConnectionContext.ConnectTimeout = 10
 
             Write-Verbose "Connect to server $ServerInstance"
-            if ($connectsqlserver.ConnectionContext.IsOpen -eq $false)
-            {
-
-                if ($null -ne $SqlCredential)
-                {
+            if ($connectsqlserver.ConnectionContext.IsOpen -eq $false) {
+                if ($null -ne $SqlCredential) {
                     $username = ($SqlCredential.UserName).TrimStart("\")
 
                     # support both ad\username and username@ad
-                    if ($username -like "*\*" -or $username -like "*@*")
-                    {
-                        if ($username -like "*\*")
-                        {
+                    if ($username -like "*\*" -or $username -like "*@*") {
+                        if ($username -like "*\*") {
                             $domain, $login = $username.Split("\")
-                            if ($domain)
-                            {
+                            if ($domain) {
                                 $formatteduser = "$login@$domain"
                             }
-                            else
-                            {
+                            else {
                                 $formatteduser = $username.Split("\")[1]
                             }
                         }
-                        else
-                        {
+                        else {
                             $formatteduser = $SqlCredential.UserName
                         }
 
@@ -92,15 +79,13 @@ function Get-SqlServerVersion
                         $connectsqlserver.ConnectionContext.ConnectAsUserName = $formatteduser
                         $connectsqlserver.ConnectionContext.ConnectAsUserPassword = ($SqlCredential).GetNetworkCredential().Password
                     }
-                    else
-                    {
+                    else {
                         $connectsqlserver.ConnectionContext.LoginSecure = $false
                         $connectsqlserver.ConnectionContext.set_Login($username)
                         $connectsqlserver.ConnectionContext.set_SecurePassword($SqlCredential.Password)
                     }
                 }
-                else
-                {
+                else {
                     $connectsqlserver.ConnectionContext.LoginSecure = $true
                 }
                 Write-Verbose "[Get-SqlServerVersion] ConnectionString:$($connectsqlserver.ConnectionContext)"
@@ -111,24 +96,19 @@ function Get-SqlServerVersion
             @{L = "VersionName"; E = { Get-SQLServerFullName $_.versionmajor } }, @{L = "Build"; E = { $_.VersionString } }
 
         }
-        catch
-        {
-            Write-Debug -Message $_.Exception
+        catch {
+            Write-Warning -Message $_.Exception.Message
             Write-Output $_.Exception.Message -ForegroundColor Yellow
         }
     }
-    End
-    {
+    End {
         Write-Verbose "The disconnect connection with $ServerInstance"
-        try
-        {
-            if ($connectsqlserver.ConnectionContext.IsOpen -eq $true)
-            {
+        try {
+            if ($connectsqlserver.ConnectionContext.IsOpen -eq $true) {
                 $connectsqlserver.ConnectionContext.Disconnect()
             }
         }
-        catch
-        {
+        catch {
             Write-Output $_.Exception.Message -ForegroundColor Yellow
         }
     }
