@@ -293,7 +293,7 @@ function Invoke-SqlServerUpdatesScan
                                             SupportEnds      = $Update.SupportEnds
                                             ServicePack      = $Update.ServicePack
                                         }
-                                        Add-Member -InputObject $update -MemberType ScriptMethod  -Name ToString -Force -Value { $this.Build }
+                                        Add-Member -InputObject $update -MemberType ScriptMethod -Name ToString -Force -Value { $this.Build }
 
                                         $UpdatesObj += $update
                                     }
