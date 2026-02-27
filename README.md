@@ -3,7 +3,7 @@ The module downloads information about the newest available updates for SQL Serv
 
 The module SqlServerUpdatesModule now works on PowerShell 6 (and PowerShell 7-preview).
 
-- 1.1.6.1 - Added support for Sql Server 2022
+- 1.1.7.1 - Added support for Sql Server 2025
 
 ## Installing
 To install the released version via PowerShell Gallery:
