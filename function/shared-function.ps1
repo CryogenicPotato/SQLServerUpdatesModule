@@ -31,6 +31,7 @@ Function Get-SQLServerFullName($param) {
         14 { return "SQL Server 2017" }
         15 { return "SQL Server 2019" }
         16 { return "SQL Server 2022" }
+        17 { return "SQL Server 2025" }
     }
 }
 
