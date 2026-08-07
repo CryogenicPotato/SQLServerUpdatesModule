@@ -133,7 +133,7 @@ function Get-SqlServerUpdate
         # $SQL = 'SQL Server 2008'
         try
         {
-            $webHtml = Invoke-WebRequest -Uri $VersionSQL.$SQL.href -UseBasicParsing
+            $webHtml = Invoke-WebRequest -Uri "$WebsiteAddress$($VersionSQL.$SQL.PathName)" -UseBasicParsing
             $ListUpdates = $parser.ParseDocument($webHtml);
         }
         catch
