@@ -93,8 +93,21 @@ function Get-SqlServerVersion {
                 $connectsqlserver.ConnectionContext.Connect()
             }
 
-            $connectsqlserver | Select-Object Name, Product, Edition, ProductLevel, VersionMajor,
-            @{L = "VersionName"; E = { Get-SQLServerFullName $_.versionmajor } }, @{L = "Build"; E = { $_.VersionString } }
+            # Read Edition/ProductLevel/ProductVersion with SERVERPROPERTY: on some instances SMO silently returns them empty
+            $serverProperties = $connectsqlserver.ConnectionContext.ExecuteWithResults(
+                "SELECT CAST(SERVERPROPERTY('Edition') AS nvarchar(128)) AS Edition,
+                        CAST(SERVERPROPERTY('ProductLevel') AS nvarchar(128)) AS ProductLevel,
+                        CAST(SERVERPROPERTY('ProductVersion') AS nvarchar(128)) AS ProductVersion").Tables[0].Rows[0]
+
+            [PSCustomObject]@{
+                Name         = $connectsqlserver.Name
+                Product      = $connectsqlserver.Product
+                Edition      = $serverProperties.Edition
+                ProductLevel = $serverProperties.ProductLevel
+                VersionMajor = $connectsqlserver.VersionMajor
+                VersionName  = Get-SQLServerFullName $connectsqlserver.VersionMajor
+                Build        = $serverProperties.ProductVersion
+            }
 
         }
         catch {
